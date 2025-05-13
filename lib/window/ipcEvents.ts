@@ -1,6 +1,6 @@
 import { type BrowserWindow, ipcMain, shell, dialog } from 'electron'
 import os from 'os'
-import fs from 'fs';
+import fs from 'fs'
 
 const handleIPC = (channel: string, handler: (...args: any[]) => void) => {
   ipcMain.handle(channel, handler)
@@ -12,28 +12,28 @@ export const registerWindowIPC = (mainWindow: BrowserWindow) => {
 
   handleIPC('select-folder', async () => {
     const result = await dialog.showOpenDialog({
-      properties: ['openDirectory']
-    });
-  
-    if (result.canceled || result.filePaths.length === 0) return [];
-  
-    const fs = require('fs');
-    const path = require('path');
-    const folderPath = result.filePaths[0];
-  
+      properties: ['openDirectory'],
+    })
+
+    if (result.canceled || result.filePaths.length === 0) return []
+
+    const fs = require('fs')
+    const path = require('path')
+    const folderPath = result.filePaths[0]
+
     const files = fs.readdirSync(folderPath).map((file) => ({
       name: file,
       path: path.join(folderPath, file),
-      isVideo: file.endsWith('.mp4')
-    }));
-  
-    return files;
-  });
+      isVideo: file.endsWith('.mp4'),
+    }))
+
+    return files
+  })
 
   handleIPC('load-video-data', async (event, videoPath: string) => {
-    const data = fs.readFileSync(videoPath);
-    return data.toString('base64');
-  });
+    const data = fs.readFileSync(videoPath)
+    return data.toString('base64')
+  })
 
   // Register window IPC
   handleIPC('init-window', () => {
