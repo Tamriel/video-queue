@@ -10,6 +10,10 @@ export const registerWindowIPC = (mainWindow: BrowserWindow) => {
   // Hide the menu bar
   mainWindow.setMenuBarVisibility(false)
 
+  function removeFileExtension(filename) {
+    return filename.replace(/\.[^/.]+$/, '')
+  }
+
   handleIPC('select-folder', async () => {
     const result = await dialog.showOpenDialog({
       properties: ['openDirectory'],
@@ -20,14 +24,15 @@ export const registerWindowIPC = (mainWindow: BrowserWindow) => {
     const fs = require('fs')
     const path = require('path')
     const folderPath = result.filePaths[0]
+    const files = fs.readdirSync(folderPath)
+    const videoFiles = files
+      .filter((f) => f.endsWith('.mp4'))
+      .map((file) => ({
+        name: removeFileExtension(file),
+        path: path.join(folderPath, file),
+      }))
 
-    const files = fs.readdirSync(folderPath).map((file) => ({
-      name: file,
-      path: path.join(folderPath, file),
-      isVideo: file.endsWith('.mp4'),
-    }))
-
-    return files
+    return videoFiles
   })
 
   handleIPC('load-video-data', async (event, videoPath: string) => {
