@@ -1,29 +1,23 @@
-import { type BrowserWindow, ipcMain, shell, dialog } from 'electron'
+import { type BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import os from 'os'
 import fs from 'fs'
+import path from 'path'
+import { Conf } from 'electron-conf/main'
+
+const store = new Conf()
 
 const handleIPC = (channel: string, handler: (...args: any[]) => void) => {
   ipcMain.handle(channel, handler)
 }
 
 export const registerWindowIPC = (mainWindow: BrowserWindow) => {
-  // Hide the menu bar
   mainWindow.setMenuBarVisibility(false)
 
-  function removeFileExtension(filename) {
+  function removeFileExtension(filename: string) {
     return filename.replace(/\.[^/.]+$/, '')
   }
 
-  handleIPC('select-folder', async () => {
-    const result = await dialog.showOpenDialog({
-      properties: ['openDirectory'],
-    })
-
-    if (result.canceled || result.filePaths.length === 0) return []
-
-    const fs = require('fs')
-    const path = require('path')
-    const folderPath = result.filePaths[0]
+  const loadVideosFromFolder = (folderPath: string) => {
     const files = fs.readdirSync(folderPath)
     const videoFiles = files
       .filter((f) => f.endsWith('.mp4'))
@@ -31,11 +25,86 @@ export const registerWindowIPC = (mainWindow: BrowserWindow) => {
         name: removeFileExtension(file),
         path: path.join(folderPath, file),
       }))
-
     return videoFiles
+  }
+
+  const scanForSubfoldersWithVideos = (folderPath: string) => {
+    const entries = fs.readdirSync(folderPath, { withFileTypes: true })
+    const subfoldersWithVideos = entries
+      .filter((entry) => entry.isDirectory())
+      .map((dir) => {
+        const subfolder = path.join(folderPath, dir.name)
+
+        // Get videos in this subfolder
+        const videos = loadVideosFromFolder(subfolder)
+
+        return {
+          name: dir.name,
+          videosSeq: videos,
+        }
+      })
+
+    return subfoldersWithVideos
+  }
+
+  const findSubSubfolderNames = (folderPath: string) => {
+    const entries = fs.readdirSync(folderPath, { withFileTypes: true })
+    const subfolders = entries.filter((entry) => entry.isDirectory())
+
+    const subSubfolderNames: string[] = []
+
+    for (const dir of subfolders) {
+      const subfolder = path.join(folderPath, dir.name)
+      const subEntries = fs.readdirSync(subfolder, { withFileTypes: true })
+      const hasSubfolders = subEntries.some((entry) => entry.isDirectory())
+      if (hasSubfolders) {
+        subSubfolderNames.push(dir.name)
+      }
+    }
+
+    return subSubfolderNames
+  }
+
+  handleIPC('set-folder', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory'],
+    })
+
+    if (result.canceled || result.filePaths.length === 0) return null
+
+    const folderPath = result.filePaths[0]
+    const videos = loadVideosFromFolder(folderPath)
+    const subfoldersWithVideos = scanForSubfoldersWithVideos(folderPath)
+    const subSubfolderNames = findSubSubfolderNames(folderPath)
+
+    const folderEntry = {
+      path: folderPath,
+      videosSeq: videos,
+      subfoldersWithVideos,
+      subSubfolderNames,
+    }
+
+    // Replace any existing folder with this one
+    store.set('mainFolder', folderEntry)
+
+    return folderEntry
   })
 
-  handleIPC('load-video-data', async (event, videoPath: string) => {
+  handleIPC('load-config', () => {
+    return {
+      mainFolder: store.get('mainFolder') as {
+        path: string
+        videosSeq: { name: string; path: string }[]
+        subfoldersWithVideos: {
+          name: string
+          videosSeq: { name: string; path: string }[]
+        }[]
+        subSubfolderNames: string[]
+      },
+    }
+  })
+
+  handleIPC('load-video-data', async (_event, videoPath: string) => {
     const data = fs.readFileSync(videoPath)
     return data.toString('base64')
   })
