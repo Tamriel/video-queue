@@ -17,7 +17,7 @@ export default function WelcomeKit() {
 
   const [videoSources, setVideoSources] = React.useState<Array<{ src: string; type: string }>>([])
   const [mainFolder, setMainFolder] = React.useState<MainFolder | null>(null)
-  const [selectedVideo, setSelectedVideo] = React.useState<Video | null>(null)
+  const [playingVideo, setPlayingVideo] = React.useState<Video | null>(null)
 
   const videoJsOptions = {
     autoplay: true,
@@ -47,7 +47,7 @@ export default function WelcomeKit() {
       const fileUrl = `file://${video.path}`
       setVideoSources([{ src: fileUrl, type: 'video/mp4' }])
     }
-    setSelectedVideo(video)
+    setPlayingVideo(video)
   }
 
   const setFolder = async () => {
@@ -67,9 +67,9 @@ export default function WelcomeKit() {
 
   return (
     <div className="welcome-content">
-      {selectedVideo ? (
+      {playingVideo ? (
         <div className="video-player-fullscreen">
-          <button className="back-btn" onClick={() => setSelectedVideo(null)}>
+          <button className="back-btn" onClick={() => setPlayingVideo(null)}>
             Back
           </button>
           <VideoJS options={videoJsOptions} onReady={handlePlayerReady} />
