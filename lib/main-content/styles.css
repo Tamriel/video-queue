@@ -24,6 +24,12 @@
 
 .video-item {
   cursor: pointer;
+  padding: 5px;
+  border-radius: 4px;
+}
+
+.video-item:hover {
+  background-color: rgba(92, 103, 165, 0.1);
 }
 
 .folder-controls {
@@ -92,4 +98,10 @@
 
 .video-player-fullscreen .back-btn:hover {
   opacity: 0.9;
+}
+
+/* Add space above and below folder names */
+.folder-column h3 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
 }
