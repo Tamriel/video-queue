@@ -52,7 +52,9 @@
 .welcome-content {
   display: flex;
   flex-direction: column;
-  padding: 2rem;
+  padding-top: 2rem;
+  padding-left: 2rem;
+  padding-right: 2rem;
   gap: 1rem;
 }
 
@@ -132,7 +134,8 @@
 .folder-controls {
   display: flex;
   flex-direction: row;
-  align-items: center;
+  align-items: center;  
+  padding: 2rem 0rem;
   justify-content: flex-start;
   flex: 0 0 auto;
   gap: 10px;
