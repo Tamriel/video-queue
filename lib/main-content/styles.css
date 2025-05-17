@@ -1,4 +1,4 @@
-.welcome-content {
+.main-content {
   display: flex;
   flex-direction: column;
   padding-top: 2rem;
@@ -7,7 +7,7 @@
   gap: 1rem;
 }
 
-.welcome-content p {
+.main-content p {
   margin-bottom: 1rem;
   color: var(--window-c-text);
   font-size: 15px;
@@ -42,7 +42,7 @@
 
 .set-folder-btn {
   padding: 8px 16px;
-  background-color: var(--welcome-c-variant);
+  background-color: #3b4268;
   color: white;
   border: none;
   border-radius: 4px;

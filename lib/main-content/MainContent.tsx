@@ -3,7 +3,7 @@ import React from 'react'
 import VideoJS from '../window/components/VideoJS'
 import videojs from 'video.js'
 
-export default function WelcomeKit() {
+export default function MainContent() {
   const playerRef = React.useRef(null)
 
   type Video = { name: string; path: string }
@@ -66,7 +66,7 @@ export default function WelcomeKit() {
   }, [])
 
   return (
-    <div className="welcome-content">
+    <div className="main-content">
       {playingVideo ? (
         <div className="video-player-fullscreen">
           <button className="back-btn" onClick={() => setPlayingVideo(null)}>
