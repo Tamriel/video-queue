@@ -56,9 +56,10 @@ export const WindowContextProvider = ({ children, titlebar }: WindowContextProvi
 
   return (
     <WindowContext value={{ titlebar, window: initProps! }}>
-      <TitlebarContextProvider>
+      {/* hide the Titlebar */}
+      {/* <TitlebarContextProvider>
         <Titlebar />
-      </TitlebarContextProvider>
+      </TitlebarContextProvider> */}
       <WindowContent>{children}</WindowContent>
     </WindowContext>
   )
