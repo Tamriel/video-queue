@@ -12,7 +12,7 @@ export function createAppWindow(): void {
     icon: appIcon,
     frame: false,
     titleBarStyle: 'hiddenInset',
-    title: 'Electron React App',
+    title: 'VideoQueue',
     webPreferences: {
       preload: join(__dirname, '../preload/preload.js'),
       sandbox: false,

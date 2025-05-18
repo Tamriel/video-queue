@@ -7,7 +7,7 @@ import '@/lib/window/window.css'
 
 ReactDOM.createRoot(document.getElementById('app') as HTMLElement).render(
   <React.StrictMode>
-    <WindowContextProvider titlebar={{ title: 'Electron React App', icon: appIcon, menuItems }}>
+    <WindowContextProvider titlebar={{ title: 'VideoQueue', icon: appIcon, menuItems }}>
       <App />
     </WindowContextProvider>
   </React.StrictMode>

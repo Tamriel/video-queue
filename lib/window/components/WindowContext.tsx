@@ -34,7 +34,7 @@ export const WindowContextProvider = ({ children, titlebar }: WindowContextProvi
   const [initProps, setInitProps] = useState<WindowInitProps | undefined>()
 
   const defaultTitlebar: TitlebarProps = {
-    title: 'Electron React App',
+    title: 'VideoQueue',
     icon: 'appIcon.png',
     titleCentered: false,
     menuItems: [],

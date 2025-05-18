@@ -1,4 +1,4 @@
-# Electron React App
+# VideoQueue
 
 <br />
 <p align="center">
