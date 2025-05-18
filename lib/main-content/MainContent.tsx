@@ -86,7 +86,7 @@ export default function MainContent() {
               <p>
                 Warning: The folders '{mainFolder.subSubfolderNames.join(', ')}' contain subfolders. They are ignored -
                 this app shows only the folders directly inside the main folder. Move these folders to the main folder
-                to view them here.
+                to have them displayed.
               </p>
             </div>
           )}

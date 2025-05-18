@@ -7,6 +7,20 @@
   gap: 1rem;
 }
 
+.folders-container {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+  width: 100%;
+}
+
+/* On larger screens, use two columns */
+@media (min-width: 900px) {
+  .folders-container {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 .main-content p {
   margin-bottom: 1rem;
   color: var(--window-c-text);
@@ -18,8 +32,9 @@
   min-width: 200px;
   border: 1px solid #ccc;
   padding: 10px;
-  max-height: 400px;
+  max-height: 500px;
   overflow-y: auto;
+  width: 100%;
 }
 
 .video-item {
@@ -119,4 +134,18 @@
 .folder-column h3 {
   margin-top: 1.5rem;
   margin-bottom: 0.75rem;
+}
+
+.folder-column {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0; /* Prevent content from causing uneven widths */
+}
+
+/* Ensure content doesn't overflow and cause uneven columns */
+.folder-column h3 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
