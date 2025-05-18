@@ -65,7 +65,7 @@ export const registerWindowIPC = (mainWindow: BrowserWindow) => {
     return subSubfolderNames
   }
 
-  handleIPC('set-folder', async () => {
+  handleIPC('set-new-folder', async () => {
     const result = await dialog.showOpenDialog({
       properties: ['openDirectory'],
     })
@@ -88,6 +88,11 @@ export const registerWindowIPC = (mainWindow: BrowserWindow) => {
     store.set('mainFolder', folderEntry)
 
     return folderEntry
+  })
+
+  handleIPC('update-main-folder', (_event, updatedMainFolder) => {
+    store.set('mainFolder', updatedMainFolder)
+    return true
   })
 
   handleIPC('load-config', () => {

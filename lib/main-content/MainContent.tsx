@@ -4,9 +4,9 @@ import VideoJS from '../window/components/VideoJS'
 import videojs from 'video.js'
 
 export default function MainContent() {
-  const playerRef = React.useRef(null)
+  const playerRef = React.useRef<any>(null)
 
-  type Video = { name: string; path: string }
+  type Video = { name: string; path: string; lastPlayedPosition?: number }
   type Subfolder = { name: string; videosSeq: Video[] }
   type MainFolder = {
     path: string
@@ -32,12 +32,52 @@ export default function MainContent() {
 
   const handlePlayerReady = (player) => {
     playerRef.current = player
+
+    if (playingVideo && playingVideo.lastPlayedPosition) {
+      player.currentTime(playingVideo.lastPlayedPosition)
+    }
+
     player.on('waiting', () => {
       videojs.log('player is waiting')
     })
+
+    player.on('pause', () => {
+      // Save position when video is paused
+      if (playingVideo) {
+        saveVideoPosition(playingVideo, player.currentTime())
+      }
+    })
+
     player.on('dispose', () => {
       videojs.log('player will dispose')
+      if (playingVideo) {
+        saveVideoPosition(playingVideo, player.currentTime())
+      }
     })
+  }
+
+  const saveVideoPosition = (video: Video, position: number) => {
+    if (!mainFolder) return
+    video.lastPlayedPosition = position
+    let updated = false
+    if (mainFolder.videosSeq) {
+      const videoIndex = mainFolder.videosSeq.findIndex((v) => v.path === video.path)
+      if (videoIndex >= 0) {
+        mainFolder.videosSeq[videoIndex].lastPlayedPosition = position
+        updated = true
+      }
+    }
+    if (!updated && mainFolder.subfoldersWithVideos) {
+      for (const subfolder of mainFolder.subfoldersWithVideos) {
+        const videoIndex = subfolder.videosSeq.findIndex((v) => v.path === video.path)
+        if (videoIndex >= 0) {
+          subfolder.videosSeq[videoIndex].lastPlayedPosition = position
+          updated = true
+          break
+        }
+      }
+    }
+    window.api.invoke('update-main-folder', mainFolder)
   }
   const isDev = process.env.NODE_ENV === 'development'
   const playVideoFromFile = async (video: Video) => {
@@ -53,8 +93,8 @@ export default function MainContent() {
     setPlayingVideo(video)
   }
 
-  const setFolder = async () => {
-    const folderData = await window.api.invoke('set-folder')
+  const setNewFolder = async () => {
+    const folderData = await window.api.invoke('set-new-folder')
     if (folderData) {
       setMainFolder(folderData)
     }
@@ -72,7 +112,15 @@ export default function MainContent() {
     <div className="main-content">
       {playingVideo ? (
         <div className="video-player-fullscreen">
-          <button className="back-btn" onClick={() => setPlayingVideo(null)}>
+          <button
+            className="back-btn"
+            onClick={() => {
+              if (playerRef.current && playingVideo) {
+                saveVideoPosition(playingVideo, playerRef.current.currentTime())
+              }
+              setPlayingVideo(null)
+            }}
+          >
             ←
           </button>
           <div className="video-container">
@@ -122,8 +170,8 @@ export default function MainContent() {
           <div className="folder-controls">
             <p>Main folder:</p>
             {mainFolder ? <span>'{mainFolder.path}'</span> : 'Not set'}
-            <button className="set-folder-btn" onClick={setFolder}>
-              Set main folder
+            <button className="set-folder-btn" onClick={setNewFolder}>
+              Set new main folder
             </button>
           </div>
         </>
