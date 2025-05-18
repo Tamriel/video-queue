@@ -70,9 +70,11 @@ export default function MainContent() {
       {playingVideo ? (
         <div className="video-player-fullscreen">
           <button className="back-btn" onClick={() => setPlayingVideo(null)}>
-            Back
+            ←
           </button>
-          <VideoJS options={videoJsOptions} onReady={handlePlayerReady} />
+          <div className="video-container">
+            <VideoJS options={videoJsOptions} onReady={handlePlayerReady} />
+          </div>
         </div>
       ) : (
         <>
