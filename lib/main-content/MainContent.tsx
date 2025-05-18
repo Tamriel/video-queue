@@ -110,13 +110,11 @@ export default function MainContent() {
               {mainFolder.subfoldersWithVideos.map((subfolder, index) => (
                 <div className="folder-column" key={index}>
                   <h3>{subfolder.name}</h3>
-                  <div className="video-list">
-                    {subfolder.videosSeq.map((video, videoIndex) => (
-                      <div className="video-item" key={videoIndex} onClick={() => playVideoFromFile(video)}>
-                        <p>{video.name}</p>
-                      </div>
-                    ))}
-                  </div>
+                  {subfolder.videosSeq.map((video, videoIndex) => (
+                    <div className="video-item" key={videoIndex} onClick={() => playVideoFromFile(video)}>
+                      <p>{video.name}</p>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>

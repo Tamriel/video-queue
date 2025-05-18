@@ -14,10 +14,10 @@
   width: 100%;
 }
 
-/* On larger screens, use two columns */
+/* On larger screens, use three columns */
 @media (min-width: 900px) {
   .folders-container {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
@@ -27,16 +27,6 @@
   font-size: 15px;
   font-weight: 400;
 }
-
-.video-list {
-  min-width: 200px;
-  border: 1px solid #ccc;
-  padding: 10px;
-  max-height: 500px;
-  overflow-y: auto;
-  width: 100%;
-}
-
 .video-item {
   cursor: pointer;
   padding: 5px;
@@ -130,22 +120,21 @@
   opacity: 0.9;
 }
 
-/* Add space above and below folder names */
-.folder-column h3 {
-  margin-top: 1.5rem;
-  margin-bottom: 0.75rem;
-}
-
 .folder-column {
   display: flex;
   flex-direction: column;
   width: 100%;
   min-width: 0; /* Prevent content from causing uneven widths */
+  background-color: rgb(47, 47, 47);
+  border-radius: 4px;
+  padding: 10px 16px;
+  max-height: 500px;
+  overflow-y: auto;
 }
 
-/* Ensure content doesn't overflow and cause uneven columns */
 .folder-column h3 {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: white;
+  padding: 5px;
+  font-size: 1.1rem;
+  font-weight: 600;
 }
