@@ -25,6 +25,9 @@ export default function MainContent() {
     responsive: true,
     fluid: true,
     sources: videoSources,
+    controlBar: {
+      pictureInPictureToggle: false,
+    },
   }
 
   const handlePlayerReady = (player) => {
