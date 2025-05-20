@@ -10,60 +10,113 @@ const handleIPC = (channel: string, handler: (...args: any[]) => void) => {
   ipcMain.handle(channel, handler)
 }
 
-export const registerWindowIPC = (mainWindow: BrowserWindow) => {
-  mainWindow.setMenuBarVisibility(false)
+export function removeFileExtension(filename: string) {
+  return filename.replace(/\.[^/.]+$/, '')
+}
 
-  function removeFileExtension(filename: string) {
-    return filename.replace(/\.[^/.]+$/, '')
+export function loadVideosFromFolder(folderPath: string) {
+  const files = fs.readdirSync(folderPath)
+  const videoFiles = files
+    .filter((f) => f.endsWith('.mp4'))
+    .map((file) => ({
+      name: removeFileExtension(file),
+      path: path.join(folderPath, file),
+      lastPlayedPosition: undefined as number | undefined,
+    }))
+  return videoFiles
+}
+
+export function scanForSubfoldersWithVideos(folderPath: string) {
+  const entries = fs.readdirSync(folderPath, { withFileTypes: true })
+  const subfoldersWithVideos = entries
+    .filter((entry) => entry.isDirectory())
+    .map((dir) => {
+      const subfolder = path.join(folderPath, dir.name)
+
+      // Get videos in this subfolder
+      const videos = loadVideosFromFolder(subfolder)
+
+      return {
+        name: dir.name,
+        videosSeq: videos,
+      }
+    })
+
+  return subfoldersWithVideos
+}
+
+export function findSubSubfolderNames(folderPath: string) {
+  const entries = fs.readdirSync(folderPath, { withFileTypes: true })
+  const subfolders = entries.filter((entry) => entry.isDirectory())
+
+  const subSubfolderNames: string[] = []
+
+  for (const dir of subfolders) {
+    const subfolder = path.join(folderPath, dir.name)
+    const subEntries = fs.readdirSync(subfolder, { withFileTypes: true })
+    const hasSubfolders = subEntries.some((entry) => entry.isDirectory())
+    if (hasSubfolders) {
+      subSubfolderNames.push(dir.name)
+    }
   }
 
-  const loadVideosFromFolder = (folderPath: string) => {
-    const files = fs.readdirSync(folderPath)
-    const videoFiles = files
-      .filter((f) => f.endsWith('.mp4'))
-      .map((file) => ({
-        name: removeFileExtension(file),
-        path: path.join(folderPath, file),
-      }))
-    return videoFiles
+  return subSubfolderNames
+}
+
+export function checkForNewFilesAndMigrateLastPlayedPositionsToMovedFiles(oldMainFolder: any) {
+  const folderPath = oldMainFolder.path
+  const fileNameToLastPlayedPositionMap = new Map<string, number>()
+
+  if (oldMainFolder.videosSeq) {
+    oldMainFolder.videosSeq.forEach((video) => {
+      if (video.lastPlayedPosition !== undefined) {
+        const filename = path.basename(video.path)
+        fileNameToLastPlayedPositionMap.set(filename, video.lastPlayedPosition)
+      }
+    })
   }
-
-  const scanForSubfoldersWithVideos = (folderPath: string) => {
-    const entries = fs.readdirSync(folderPath, { withFileTypes: true })
-    const subfoldersWithVideos = entries
-      .filter((entry) => entry.isDirectory())
-      .map((dir) => {
-        const subfolder = path.join(folderPath, dir.name)
-
-        // Get videos in this subfolder
-        const videos = loadVideosFromFolder(subfolder)
-
-        return {
-          name: dir.name,
-          videosSeq: videos,
+  if (oldMainFolder.subfoldersWithVideos) {
+    oldMainFolder.subfoldersWithVideos.forEach((subfolder) => {
+      subfolder.videosSeq.forEach((video) => {
+        if (video.lastPlayedPosition !== undefined) {
+          const filename = path.basename(video.path)
+          fileNameToLastPlayedPositionMap.set(filename, video.lastPlayedPosition)
         }
       })
-
-    return subfoldersWithVideos
+    })
   }
 
-  const findSubSubfolderNames = (folderPath: string) => {
-    const entries = fs.readdirSync(folderPath, { withFileTypes: true })
-    const subfolders = entries.filter((entry) => entry.isDirectory())
+  // Re-scan the folder structure
+  const videos = loadVideosFromFolder(folderPath)
+  const subfoldersWithVideos = scanForSubfoldersWithVideos(folderPath)
+  const subSubfolderNames = findSubSubfolderNames(folderPath)
 
-    const subSubfolderNames: string[] = []
-
-    for (const dir of subfolders) {
-      const subfolder = path.join(folderPath, dir.name)
-      const subEntries = fs.readdirSync(subfolder, { withFileTypes: true })
-      const hasSubfolders = subEntries.some((entry) => entry.isDirectory())
-      if (hasSubfolders) {
-        subSubfolderNames.push(dir.name)
-      }
+  // Migrate playback positions to the new structure
+  videos.forEach((video) => {
+    const filename = path.basename(video.path)
+    if (fileNameToLastPlayedPositionMap.has(filename)) {
+      video.lastPlayedPosition = fileNameToLastPlayedPositionMap.get(filename)
     }
+  })
+  subfoldersWithVideos.forEach((subfolder) => {
+    subfolder.videosSeq.forEach((video) => {
+      const filename = path.basename(video.path)
+      if (fileNameToLastPlayedPositionMap.has(filename)) {
+        video.lastPlayedPosition = fileNameToLastPlayedPositionMap.get(filename)
+      }
+    })
+  })
 
-    return subSubfolderNames
+  return {
+    path: folderPath,
+    videosSeq: videos,
+    subfoldersWithVideos,
+    subSubfolderNames,
   }
+}
+
+export const registerWindowIPC = (mainWindow: BrowserWindow) => {
+  mainWindow.setMenuBarVisibility(false)
 
   handleIPC('set-new-folder', async () => {
     const result = await dialog.showOpenDialog({
@@ -96,17 +149,23 @@ export const registerWindowIPC = (mainWindow: BrowserWindow) => {
   })
 
   handleIPC('load-config', () => {
-    return {
-      mainFolder: store.get('mainFolder') as {
-        path: string
-        videosSeq: { name: string; path: string }[]
-        subfoldersWithVideos: {
-          name: string
-          videosSeq: { name: string; path: string }[]
-        }[]
-        subSubfolderNames: string[]
-      },
+    const storedMainFolder = store.get('mainFolder') as {
+      path: string
+      videosSeq: { name: string; path: string; lastPlayedPosition?: number }[]
+      subfoldersWithVideos: {
+        name: string
+        videosSeq: { name: string; path: string; lastPlayedPosition?: number }[]
+      }[]
+      subSubfolderNames: string[]
     }
+
+    if (storedMainFolder && fs.existsSync(storedMainFolder.path)) {
+      const refreshedFolder = checkForNewFilesAndMigrateLastPlayedPositionsToMovedFiles(storedMainFolder)
+      store.set('mainFolder', refreshedFolder)
+      return { mainFolder: refreshedFolder }
+    }
+
+    return { mainFolder: storedMainFolder }
   })
 
   handleIPC('load-video-data', async (_event, videoPath: string) => {
