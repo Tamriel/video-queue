@@ -10,6 +10,28 @@ const handleIPC = (channel: string, handler: (...args: any[]) => void) => {
   ipcMain.handle(channel, handler)
 }
 
+export function playingTimeToFilename(seconds: number): string {
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = Math.floor(seconds % 60)
+  return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`
+}
+
+export function extractPlayingTimeFromFilename(filename: string): { name: string; position?: number } {
+  // Match pattern like "05:30 " at the start of filename
+  const match = filename.match(/^(\d{2}):(\d{2})\s+(.+)$/)
+
+  if (match) {
+    const minutes = parseInt(match[1], 10)
+    const seconds = parseInt(match[2], 10)
+    const name = match[3]
+    const position = minutes * 60 + seconds
+
+    return { name, position }
+  }
+
+  return { name: filename }
+}
+
 export function removeFileExtension(filename: string) {
   return filename.replace(/\.[^/.]+$/, '')
 }
@@ -18,12 +40,37 @@ export function loadVideosFromFolder(folderPath: string) {
   const files = fs.readdirSync(folderPath)
   const videoFiles = files
     .filter((f) => f.endsWith('.mp4'))
-    .map((file) => ({
-      name: removeFileExtension(file),
-      path: path.join(folderPath, file),
-      lastPlayedPosition: undefined as number | undefined,
-    }))
+    .map((file) => {
+      const fullPath = path.join(folderPath, file)
+      const { name: extractedName, position } = extractPlayingTimeFromFilename(removeFileExtension(file))
+
+      return {
+        name: extractedName,
+        path: fullPath,
+        lastPlayedPosition: position,
+      }
+    })
   return videoFiles
+}
+
+export function renameVideoWithPosition(videoPath: string, position: number): string {
+  const directory = path.dirname(videoPath)
+  const filename = path.basename(videoPath)
+  const extension = path.extname(filename)
+  const nameWithoutExt = filename.slice(0, filename.length - extension.length)
+
+  // Remove any existing time prefix
+  const cleanName = nameWithoutExt.replace(/^\d{2}:\d{2}\s+/, '')
+
+  // Create new filename with time prefix
+  const timePrefix = playingTimeToFilename(position)
+  const newFilename = `${timePrefix} ${cleanName}${extension}`
+  const newPath = path.join(directory, newFilename)
+
+  // Rename the file
+  fs.renameSync(videoPath, newPath)
+
+  return newPath
 }
 
 export function scanForSubfoldersWithVideos(folderPath: string) {
@@ -63,58 +110,6 @@ export function findSubSubfolderNames(folderPath: string) {
   return subSubfolderNames
 }
 
-export function checkForNewFilesAndMigrateLastPlayedPositionsToMovedFiles(oldMainFolder: any) {
-  const folderPath = oldMainFolder.path
-  const fileNameToLastPlayedPositionMap = new Map<string, number>()
-
-  if (oldMainFolder.videosSeq) {
-    oldMainFolder.videosSeq.forEach((video) => {
-      if (video.lastPlayedPosition !== undefined) {
-        const filename = path.basename(video.path)
-        fileNameToLastPlayedPositionMap.set(filename, video.lastPlayedPosition)
-      }
-    })
-  }
-  if (oldMainFolder.subfoldersWithVideos) {
-    oldMainFolder.subfoldersWithVideos.forEach((subfolder) => {
-      subfolder.videosSeq.forEach((video) => {
-        if (video.lastPlayedPosition !== undefined) {
-          const filename = path.basename(video.path)
-          fileNameToLastPlayedPositionMap.set(filename, video.lastPlayedPosition)
-        }
-      })
-    })
-  }
-
-  // Re-scan the folder structure
-  const videos = loadVideosFromFolder(folderPath)
-  const subfoldersWithVideos = scanForSubfoldersWithVideos(folderPath)
-  const subSubfolderNames = findSubSubfolderNames(folderPath)
-
-  // Migrate playback positions to the new structure
-  videos.forEach((video) => {
-    const filename = path.basename(video.path)
-    if (fileNameToLastPlayedPositionMap.has(filename)) {
-      video.lastPlayedPosition = fileNameToLastPlayedPositionMap.get(filename)
-    }
-  })
-  subfoldersWithVideos.forEach((subfolder) => {
-    subfolder.videosSeq.forEach((video) => {
-      const filename = path.basename(video.path)
-      if (fileNameToLastPlayedPositionMap.has(filename)) {
-        video.lastPlayedPosition = fileNameToLastPlayedPositionMap.get(filename)
-      }
-    })
-  })
-
-  return {
-    path: folderPath,
-    videosSeq: videos,
-    subfoldersWithVideos,
-    subSubfolderNames,
-  }
-}
-
 export const registerWindowIPC = (mainWindow: BrowserWindow) => {
   mainWindow.setMenuBarVisibility(false)
 
@@ -138,30 +133,32 @@ export const registerWindowIPC = (mainWindow: BrowserWindow) => {
     }
 
     // Replace any existing folder with this one
-    store.set('mainFolder', folderEntry)
+    store.set('mainFolder', { path: folderPath })
 
     return folderEntry
   })
 
   handleIPC('update-main-folder', (_event, updatedMainFolder) => {
-    store.set('mainFolder', updatedMainFolder)
+    store.set('mainFolder', { path: updatedMainFolder.path })
     return true
   })
 
   handleIPC('load-config', () => {
-    const storedMainFolder = store.get('mainFolder') as {
-      path: string
-      videosSeq: { name: string; path: string; lastPlayedPosition?: number }[]
-      subfoldersWithVideos: {
-        name: string
-        videosSeq: { name: string; path: string; lastPlayedPosition?: number }[]
-      }[]
-      subSubfolderNames: string[]
-    }
+    const storedMainFolder = store.get('mainFolder') as { path: string }
 
     if (storedMainFolder && fs.existsSync(storedMainFolder.path)) {
-      const refreshedFolder = checkForNewFilesAndMigrateLastPlayedPositionsToMovedFiles(storedMainFolder)
-      store.set('mainFolder', refreshedFolder)
+      // Re-scan the folder to get the current structure with positions from filenames
+      const videos = loadVideosFromFolder(storedMainFolder.path)
+      const subfoldersWithVideos = scanForSubfoldersWithVideos(storedMainFolder.path)
+      const subSubfolderNames = findSubSubfolderNames(storedMainFolder.path)
+
+      const refreshedFolder = {
+        path: storedMainFolder.path,
+        videosSeq: videos,
+        subfoldersWithVideos,
+        subSubfolderNames,
+      }
+
       return { mainFolder: refreshedFolder }
     }
 
@@ -171,6 +168,10 @@ export const registerWindowIPC = (mainWindow: BrowserWindow) => {
   handleIPC('load-video-data', async (_event, videoPath: string) => {
     const data = fs.readFileSync(videoPath)
     return data.toString('base64')
+  })
+
+  handleIPC('rename-video-with-position', (_event, videoPath: string, position: number) => {
+    return renameVideoWithPosition(videoPath, position)
   })
 
   // Register window IPC

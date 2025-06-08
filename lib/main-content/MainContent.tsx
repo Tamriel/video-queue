@@ -18,6 +18,7 @@ export default function MainContent() {
   const [videoSources, setVideoSources] = React.useState<Array<{ src: string; type: string }>>([])
   const [mainFolder, setMainFolder] = React.useState<MainFolder | null>(null)
   const [playingVideo, setPlayingVideo] = React.useState<Video | null>(null)
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null)
 
   const videoJsOptions = {
     autoplay: true,
@@ -56,69 +57,114 @@ export default function MainContent() {
     })
   }
 
-  const saveVideoPosition = (video: Video, position: number) => {
+  const saveVideoPosition = async (video: Video, position: number) => {
     if (!mainFolder) return
-    video.lastPlayedPosition = position
-    let updated = false
-    if (mainFolder.videosSeq) {
-      const videoIndex = mainFolder.videosSeq.findIndex((v) => v.path === video.path)
-      if (videoIndex >= 0) {
-        mainFolder.videosSeq[videoIndex].lastPlayedPosition = position
-        updated = true
-      }
-    }
-    if (!updated && mainFolder.subfoldersWithVideos) {
-      for (const subfolder of mainFolder.subfoldersWithVideos) {
-        const videoIndex = subfolder.videosSeq.findIndex((v) => v.path === video.path)
+
+    try {
+      // Rename the file to include the position in the filename
+      const newPath = await window.api.invoke('rename-video-with-position', video.path, position)
+      const oldPath = video.path
+
+      // Update the video path in memory
+      video.path = newPath
+      video.lastPlayedPosition = position
+
+      let updated = false
+      if (mainFolder.videosSeq) {
+        const videoIndex = mainFolder.videosSeq.findIndex((v) => v.path === oldPath)
         if (videoIndex >= 0) {
-          subfolder.videosSeq[videoIndex].lastPlayedPosition = position
+          mainFolder.videosSeq[videoIndex].path = newPath
+          mainFolder.videosSeq[videoIndex].lastPlayedPosition = position
           updated = true
-          break
         }
       }
+
+      if (!updated && mainFolder.subfoldersWithVideos) {
+        for (const subfolder of mainFolder.subfoldersWithVideos) {
+          const videoIndex = subfolder.videosSeq.findIndex((v) => v.path === oldPath)
+          if (videoIndex >= 0) {
+            subfolder.videosSeq[videoIndex].path = newPath
+            subfolder.videosSeq[videoIndex].lastPlayedPosition = position
+            updated = true
+            break
+          }
+        }
+      }
+
+      await window.api.invoke('update-main-folder', { path: mainFolder.path })
+    } catch (error) {
+      setErrorMessage(`Failed to save video position: ${error instanceof Error ? error.message : String(error)}`)
     }
-    window.api.invoke('update-main-folder', mainFolder)
   }
   const isDev = process.env.NODE_ENV === 'development'
   const playVideoFromFile = async (video: Video) => {
-    if (isDev) {
-      const base64 = await window.api.invoke('load-video-data', video.path)
-      const blob = new Blob([Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))], { type: 'video/mp4' })
-      const blobUrl = URL.createObjectURL(blob)
-      setVideoSources([{ src: blobUrl, type: 'video/mp4' }])
-    } else {
-      const fileUrl = `file://${video.path}`
-      setVideoSources([{ src: fileUrl, type: 'video/mp4' }])
+    try {
+      if (isDev) {
+        const base64 = await window.api.invoke('load-video-data', video.path)
+        const blob = new Blob([Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))], { type: 'video/mp4' })
+        const blobUrl = URL.createObjectURL(blob)
+        setVideoSources([{ src: blobUrl, type: 'video/mp4' }])
+      } else {
+        const fileUrl = `file://${video.path}`
+        setVideoSources([{ src: fileUrl, type: 'video/mp4' }])
+      }
+      setPlayingVideo(video)
+    } catch (error) {
+      setErrorMessage(`Failed to load video: ${error instanceof Error ? error.message : String(error)}`)
     }
-    setPlayingVideo(video)
   }
 
   const setNewFolder = async () => {
-    const folderData = await window.api.invoke('set-new-folder')
-    if (folderData) {
-      setMainFolder(folderData)
+    try {
+      const folderData = await window.api.invoke('set-new-folder')
+      if (folderData) {
+        setMainFolder(folderData)
+      }
+    } catch (error) {
+      setErrorMessage(`Failed to set new folder: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
   React.useEffect(() => {
-    window.api.invoke('load-config').then((data) => {
-      if (data?.mainFolder) {
-        setMainFolder(data.mainFolder)
-      }
-    })
+    window.api
+      .invoke('load-config')
+      .then((data) => {
+        if (data?.mainFolder) {
+          setMainFolder(data.mainFolder)
+        }
+      })
+      .catch((error) => {
+        setErrorMessage(`Failed to load configuration: ${error instanceof Error ? error.message : String(error)}`)
+      })
   }, [])
 
   return (
     <div className="main-content">
+      {errorMessage && (
+        <div className="error-message">
+          <p>{errorMessage}</p>
+          <div className="error-actions">
+            <button className="error-btn" onClick={() => setErrorMessage(null)}>
+              OK
+            </button>
+          </div>
+        </div>
+      )}
       {playingVideo ? (
         <div className="video-player-fullscreen">
           <button
             className="back-btn"
-            onClick={() => {
-              if (playerRef.current && playingVideo) {
-                saveVideoPosition(playingVideo, playerRef.current.currentTime())
+            onClick={async () => {
+              try {
+                if (playerRef.current && playingVideo) {
+                  await saveVideoPosition(playingVideo, playerRef.current.currentTime())
+                }
+                setPlayingVideo(null)
+              } catch (error) {
+                setErrorMessage(
+                  `Failed to save video position: ${error instanceof Error ? error.message : String(error)}`
+                )
               }
-              setPlayingVideo(null)
             }}
           >
             ←
