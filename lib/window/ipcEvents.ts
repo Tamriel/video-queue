@@ -16,20 +16,34 @@ export function playingTimeToFilename(seconds: number): string {
   return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`
 }
 
-export function extractPlayingTimeFromFilename(filename: string): { name: string; position?: number } {
-  // Match pattern like "05:30 " at the start of filename
-  const match = filename.match(/^(\d{2}):(\d{2})\s+(.+)$/)
+export function extractOrderAndPlayingTimeFromFilename(filename: string): {
+  name: string
+  position?: number
+  index?: number
+} {
+  // Check for index prefix
+  let indexMatch = filename.match(/^(\d+)\s+(.+)$/)
+  let remainingName = filename
+  let index: number | undefined = undefined
 
-  if (match) {
-    const minutes = parseInt(match[1], 10)
-    const seconds = parseInt(match[2], 10)
-    const name = match[3]
-    const position = minutes * 60 + seconds
-
-    return { name, position }
+  if (indexMatch) {
+    index = parseInt(indexMatch[1], 10)
+    remainingName = indexMatch[2]
   }
 
-  return { name: filename }
+  // Then check for time prefix in the remaining name
+  const timeMatch = remainingName.match(/^(\d{2}):(\d{2})\s+(.+)$/)
+
+  if (timeMatch) {
+    const minutes = parseInt(timeMatch[1], 10)
+    const seconds = parseInt(timeMatch[2], 10)
+    const name = timeMatch[3]
+    const position = minutes * 60 + seconds
+
+    return { name, position, index }
+  }
+
+  return { name: indexMatch ? remainingName : filename, index }
 }
 
 export function removeFileExtension(filename: string) {
@@ -42,12 +56,13 @@ export function loadVideosFromFolder(folderPath: string) {
     .filter((f) => f.endsWith('.mp4'))
     .map((file) => {
       const fullPath = path.join(folderPath, file)
-      const { name: extractedName, position } = extractPlayingTimeFromFilename(removeFileExtension(file))
+      const { name: extractedName, position, index } = extractOrderAndPlayingTimeFromFilename(removeFileExtension(file))
 
       return {
         name: extractedName,
         path: fullPath,
         lastPlayedPosition: position,
+        index,
       }
     })
   return videoFiles
@@ -59,12 +74,39 @@ export function renameVideoWithPosition(videoPath: string, position: number): st
   const extension = path.extname(filename)
   const nameWithoutExt = filename.slice(0, filename.length - extension.length)
 
-  // Remove any existing time prefix
-  const cleanName = nameWithoutExt.replace(/^\d{2}:\d{2}\s+/, '')
+  // Extract index if it exists
+  const indexMatch = nameWithoutExt.match(/^(\d+)\s+(.+)$/)
+  const indexPrefix = indexMatch ? `${indexMatch[1]} ` : ''
 
-  // Create new filename with time prefix
+  // Get the clean name (without time prefix and index prefix)
+  let cleanName = nameWithoutExt
+  if (indexMatch) {
+    cleanName = indexMatch[2]
+  }
+  cleanName = cleanName.replace(/^\d{2}:\d{2}\s+/, '')
+
+  // Create new filename with time prefix and preserve index if it exists
   const timePrefix = playingTimeToFilename(position)
-  const newFilename = `${timePrefix} ${cleanName}${extension}`
+  const newFilename = `${indexPrefix}${timePrefix} ${cleanName}${extension}`
+  const newPath = path.join(directory, newFilename)
+
+  // Rename the file
+  fs.renameSync(videoPath, newPath)
+
+  return newPath
+}
+
+export function updateVideoIndex(videoPath: string, index: number): string {
+  const directory = path.dirname(videoPath)
+  const filename = path.basename(videoPath)
+  const extension = path.extname(filename)
+  const nameWithoutExt = filename.slice(0, filename.length - extension.length)
+
+  // Remove any existing index prefix
+  const cleanName = nameWithoutExt.replace(/^\d+\s+/, '')
+
+  // Create new filename with index prefix
+  const newFilename = `${index} ${cleanName}${extension}`
   const newPath = path.join(directory, newFilename)
 
   // Rename the file
@@ -172,6 +214,10 @@ export const registerWindowIPC = (mainWindow: BrowserWindow) => {
 
   handleIPC('rename-video-with-position', (_event, videoPath: string, position: number) => {
     return renameVideoWithPosition(videoPath, position)
+  })
+
+  handleIPC('update-video-index', (_event, videoPath: string, index: number) => {
+    return updateVideoIndex(videoPath, index)
   })
 
   // Register window IPC

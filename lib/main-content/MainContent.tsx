@@ -6,7 +6,7 @@ import videojs from 'video.js'
 export default function MainContent() {
   const playerRef = React.useRef<any>(null)
 
-  type Video = { name: string; path: string; lastPlayedPosition?: number }
+  type Video = { name: string; path: string; lastPlayedPosition?: number; index?: number }
   type Subfolder = { name: string; videosSeq: Video[] }
   type MainFolder = {
     path: string
@@ -19,6 +19,8 @@ export default function MainContent() {
   const [mainFolder, setMainFolder] = React.useState<MainFolder | null>(null)
   const [playingVideo, setPlayingVideo] = React.useState<Video | null>(null)
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null)
+  const [selectedVideoIndex, setSelectedVideoIndex] = React.useState<number>(-1)
+  const [selectedFolderIndex, setSelectedFolderIndex] = React.useState<number>(-1)
 
   const videoJsOptions = {
     autoplay: true,
@@ -97,6 +99,7 @@ export default function MainContent() {
     }
   }
   const isDev = process.env.NODE_ENV === 'development'
+
   const playVideoFromFile = async (video: Video) => {
     try {
       if (isDev) {
@@ -125,12 +128,224 @@ export default function MainContent() {
     }
   }
 
+  const handleVideoClick = (videoIndex: number, folderIndex: number) => {
+    setSelectedVideoIndex(videoIndex)
+    setSelectedFolderIndex(folderIndex)
+  }
+
+  const handleVideoDoubleClick = (video: Video) => {
+    playVideoFromFile(video)
+  }
+
+  const findNextNonEmptyFolderIndex = (currentIndex: number): number => {
+    if (!mainFolder) return -1
+
+    let nextIndex = currentIndex + 1
+    while (nextIndex < mainFolder.subfoldersWithVideos.length) {
+      if (mainFolder.subfoldersWithVideos[nextIndex].videosSeq.length > 0) {
+        return nextIndex
+      }
+      nextIndex++
+    }
+    return -1 // No next non-empty folder found
+  }
+
+  const findPrevNonEmptyFolderIndex = (currentIndex: number): number => {
+    if (!mainFolder) return -1
+
+    let prevIndex = currentIndex - 1
+    while (prevIndex >= 0) {
+      if (mainFolder.subfoldersWithVideos[prevIndex].videosSeq.length > 0) {
+        return prevIndex
+      }
+      prevIndex--
+    }
+    return -1 // No previous non-empty folder found
+  }
+
+  const findFirstNonEmptyFolderIndex = (): number => {
+    if (!mainFolder) return -1
+    return mainFolder.subfoldersWithVideos.findIndex((subfolder) => subfolder.videosSeq.length > 0)
+  }
+
+  const handleKeyDown = async (e: KeyboardEvent) => {
+    if (!mainFolder) return
+
+    // Handle arrow keys for navigation
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault()
+
+      const hasNonEmptyFolders = mainFolder.subfoldersWithVideos.some((subfolder) => subfolder.videosSeq.length > 0)
+      if (!hasNonEmptyFolders) return
+
+      // If no valid folder is selected or the selected folder is empty, select the first non-empty folder
+      if (
+        selectedFolderIndex === -1 ||
+        selectedFolderIndex >= mainFolder.subfoldersWithVideos.length ||
+        mainFolder.subfoldersWithVideos[selectedFolderIndex].videosSeq.length === 0
+      ) {
+        const firstNonEmptyIndex = findFirstNonEmptyFolderIndex()
+        if (firstNonEmptyIndex !== -1) {
+          setSelectedFolderIndex(firstNonEmptyIndex)
+          setSelectedVideoIndex(0)
+        }
+        return
+      }
+
+      const currentFolder = mainFolder.subfoldersWithVideos[selectedFolderIndex]
+
+      if (e.key === 'ArrowUp') {
+        if (selectedVideoIndex > 0) {
+          // Move to previous video in current folder
+          setSelectedVideoIndex(selectedVideoIndex - 1)
+        } else {
+          // Move to last video in previous non-empty folder
+          const prevFolderIndex = findPrevNonEmptyFolderIndex(selectedFolderIndex)
+          if (prevFolderIndex !== -1) {
+            const prevFolder = mainFolder.subfoldersWithVideos[prevFolderIndex]
+            setSelectedFolderIndex(prevFolderIndex)
+            setSelectedVideoIndex(prevFolder.videosSeq.length - 1)
+          }
+        }
+      } else if (e.key === 'ArrowDown') {
+        if (selectedVideoIndex < currentFolder.videosSeq.length - 1) {
+          // Move to next video in current folder
+          setSelectedVideoIndex(selectedVideoIndex + 1)
+        } else {
+          // Move to first video in next non-empty folder
+          const nextFolderIndex = findNextNonEmptyFolderIndex(selectedFolderIndex)
+          if (nextFolderIndex !== -1) {
+            setSelectedFolderIndex(nextFolderIndex)
+            setSelectedVideoIndex(0)
+          }
+        }
+      }
+
+      // Handle Ctrl+Arrow for reordering
+      if (e.ctrlKey) {
+        const currentVideos = currentFolder.videosSeq
+        let newIndex = selectedVideoIndex
+
+        if (e.key === 'ArrowUp' && selectedVideoIndex > 0) {
+          newIndex = selectedVideoIndex - 1
+        } else if (e.key === 'ArrowDown' && selectedVideoIndex < currentVideos.length - 1) {
+          newIndex = selectedVideoIndex + 1
+        } else {
+          return // Can't move beyond boundaries
+        }
+
+        const videos = [...currentVideos]
+        const [movedVideo] = videos.splice(selectedVideoIndex, 1)
+        videos.splice(newIndex, 0, movedVideo)
+
+        // Update the state
+        const updatedSubfolders = [...mainFolder.subfoldersWithVideos]
+        updatedSubfolders[selectedFolderIndex] = {
+          ...updatedSubfolders[selectedFolderIndex],
+          videosSeq: videos,
+        }
+        setMainFolder({
+          ...mainFolder,
+          subfoldersWithVideos: updatedSubfolders,
+        })
+
+        // First update the selected index to maintain selection during async operations
+        setSelectedVideoIndex(newIndex)
+
+        // Update the indices in filenames and update the model with new paths
+        try {
+          const updatedVideos = [...videos] // Create a copy to store updated videos
+
+          for (let i = 0; i < videos.length; i++) {
+            const video = videos[i]
+            // Use i+1 to start indexing from 1 instead of 0
+            const newPath = await window.api.invoke('update-video-index', video.path, i + 1)
+
+            // Update the video path in the model
+            updatedVideos[i] = {
+              ...video,
+              path: newPath,
+            }
+          }
+
+          // Update the state with the new paths
+          const updatedSubfoldersWithPaths = [...mainFolder.subfoldersWithVideos]
+          updatedSubfoldersWithPaths[selectedFolderIndex] = {
+            ...updatedSubfoldersWithPaths[selectedFolderIndex],
+            videosSeq: updatedVideos,
+          }
+
+          // Use a callback to ensure we're working with the latest state
+          setMainFolder((prevFolder) => {
+            if (!prevFolder) return null
+            return {
+              ...prevFolder,
+              subfoldersWithVideos: updatedSubfoldersWithPaths,
+            }
+          })
+        } catch (error) {
+          setErrorMessage(`Failed to update video order: ${error instanceof Error ? error.message : String(error)}`)
+        }
+      }
+    }
+
+    // Handle Enter key to play selected video
+    if (e.key === 'Enter') {
+      if (
+        selectedFolderIndex >= 0 &&
+        selectedFolderIndex < mainFolder.subfoldersWithVideos.length &&
+        selectedVideoIndex >= 0 &&
+        selectedVideoIndex < mainFolder.subfoldersWithVideos[selectedFolderIndex].videosSeq.length
+      ) {
+        const selectedVideo = mainFolder.subfoldersWithVideos[selectedFolderIndex].videosSeq[selectedVideoIndex]
+        playVideoFromFile(selectedVideo)
+      }
+    }
+  }
+
+  // Add global keyboard event listener
+  React.useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Only handle keyboard events when not in an input field
+      if (
+        document.activeElement &&
+        (document.activeElement.tagName === 'INPUT' ||
+          document.activeElement.tagName === 'TEXTAREA' ||
+          (document.activeElement as HTMLElement).hasAttribute('contenteditable'))
+      ) {
+        return
+      }
+
+      handleKeyDown(e)
+    }
+
+    window.addEventListener('keydown', handleGlobalKeyDown)
+
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown)
+    }
+  }, [mainFolder, selectedFolderIndex, selectedVideoIndex]) // Re-add when these dependencies change
+
   React.useEffect(() => {
     window.api
       .invoke('load-config')
       .then((data) => {
         if (data?.mainFolder) {
           setMainFolder(data.mainFolder)
+          // Directly initialize selection with the data from the config
+          // This ensures we don't need to wait for the state update
+          if (data.mainFolder.subfoldersWithVideos) {
+            const firstNonEmptyIndex = data.mainFolder.subfoldersWithVideos.findIndex(
+              (subfolder) => subfolder.videosSeq.length > 0
+            )
+
+            if (firstNonEmptyIndex >= 0) {
+              setTimeout(() => {
+                setSelectedFolderIndex(firstNonEmptyIndex)
+                setSelectedVideoIndex(0)
+              }, 100)
+            }
+          }
         }
       })
       .catch((error) => {
@@ -186,26 +401,17 @@ export default function MainContent() {
           )}
           {mainFolder && (
             <div className="folders-container">
-              {/* Main folder videos column (only if videos exist) */}
-              {mainFolder.videosSeq.length > 0 && (
-                <div className="folder-column">
-                  <h3>Main folder videos</h3>
-                  <div className="video-list">
-                    {mainFolder.videosSeq.map((video, index) => (
-                      <div className="video-item" key={index} onClick={() => playVideoFromFile(video)}>
-                        <p>{video.name}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {/* Subfolder columns */}
               {mainFolder.subfoldersWithVideos.map((subfolder, index) => (
                 <div className="folder-column" key={index}>
                   <h3>{subfolder.name}</h3>
                   {subfolder.videosSeq.map((video, videoIndex) => (
-                    <div className="video-item" key={videoIndex} onClick={() => playVideoFromFile(video)}>
+                    <div
+                      className={`video-item ${selectedFolderIndex === index && selectedVideoIndex === videoIndex ? 'selected' : ''}`}
+                      key={videoIndex}
+                      onClick={() => handleVideoClick(videoIndex, index)}
+                      onDoubleClick={() => handleVideoDoubleClick(video)}
+                    >
                       <p>{video.name}</p>
                     </div>
                   ))}

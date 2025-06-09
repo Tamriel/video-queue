@@ -28,13 +28,21 @@
   font-weight: 400;
 }
 .video-item {
-  cursor: pointer;
   padding: 5px;
   border-radius: 4px;
+  transition: background-color 0.2s ease;
 }
 
 .video-item:hover {
-  background-color: rgba(92, 103, 165, 0.1);
+  background-color: rgba(123, 132, 183, 0.189);
+}
+
+.video-item.selected {
+  background-color: rgba(92, 103, 165, 0.3);
+}
+
+.video-item.selected:hover {
+  background-color: rgba(92, 103, 165, 0.4);
 }
 
 .folder-controls {
@@ -83,7 +91,6 @@
   border-radius: 4px;
   margin-bottom: 1rem;
   width: 100%;
-  border-left: 4px solid #dc3545;
 }
 
 .error-message p {
@@ -105,6 +112,12 @@
   cursor: pointer;
   font-weight: 500;
   transition: background-color 0.2s;
+  background-color: #dc3545;
+  color: white;
+}
+
+.error-btn:hover {
+  background-color: #c82333;
 }
 
 .video-player-fullscreen {
