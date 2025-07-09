@@ -220,6 +220,15 @@ export const registerWindowIPC = (mainWindow: BrowserWindow) => {
     return updateVideoIndex(videoPath, index)
   })
 
+  handleIPC('move-video-between-folders', (_event, videoPath: string, targetFolderName: string) => {
+    const mainFolderPath = path.dirname(path.dirname(videoPath))
+    const targetFolderPath = path.join(mainFolderPath, targetFolderName)
+    const filename = path.basename(videoPath)
+    const newPath = path.join(targetFolderPath, filename)
+    fs.renameSync(videoPath, newPath)
+    return newPath
+  })
+
   // Register window IPC
   handleIPC('init-window', () => {
     const { width, height } = mainWindow.getBounds()

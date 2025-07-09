@@ -137,6 +137,26 @@ export default function MainContent() {
     playVideoFromFile(video)
   }
 
+  const findNextFolderIndex = (currentIndex: number): number => {
+    if (!mainFolder) return -1
+
+    const nextIndex = currentIndex + 1
+    if (nextIndex < mainFolder.subfoldersWithVideos.length) {
+      return nextIndex
+    }
+    return -1 // No next folder found
+  }
+
+  const findPrevFolderIndex = (currentIndex: number): number => {
+    if (!mainFolder) return -1
+
+    const prevIndex = currentIndex - 1
+    if (prevIndex >= 0) {
+      return prevIndex
+    }
+    return -1 // No previous folder found
+  }
+
   const findNextNonEmptyFolderIndex = (currentIndex: number): number => {
     if (!mainFolder) return -1
 
@@ -225,66 +245,146 @@ export default function MainContent() {
       if (e.ctrlKey) {
         const currentVideos = currentFolder.videosSeq
         let newIndex = selectedVideoIndex
+        let newFolderIndex = selectedFolderIndex
+        let crossFolderMove = false
 
-        if (e.key === 'ArrowUp' && selectedVideoIndex > 0) {
-          newIndex = selectedVideoIndex - 1
-        } else if (e.key === 'ArrowDown' && selectedVideoIndex < currentVideos.length - 1) {
-          newIndex = selectedVideoIndex + 1
+        if (e.key === 'ArrowUp') {
+          if (selectedVideoIndex > 0) {
+            // Standard move up within the same folder
+            newIndex = selectedVideoIndex - 1
+          } else {
+            // At index 0, try to move to previous folder
+            const prevFolderIndex = findPrevFolderIndex(selectedFolderIndex)
+            if (prevFolderIndex !== -1) {
+              newFolderIndex = prevFolderIndex
+              // If the target folder has videos, add to the end, otherwise it will be the first
+              const targetVideosCount = mainFolder.subfoldersWithVideos[prevFolderIndex].videosSeq.length
+              newIndex = targetVideosCount
+              crossFolderMove = true
+            } else {
+              return // Can't move beyond first folder
+            }
+          }
+        } else if (e.key === 'ArrowDown') {
+          if (selectedVideoIndex < currentVideos.length - 1) {
+            // Standard move down within the same folder
+            newIndex = selectedVideoIndex + 1
+          } else {
+            // At last index, try to move to next folder
+            const nextFolderIndex = findNextFolderIndex(selectedFolderIndex)
+            if (nextFolderIndex !== -1) {
+              newFolderIndex = nextFolderIndex
+              newIndex = 0
+              crossFolderMove = true
+            } else {
+              return // Can't move beyond last folder
+            }
+          }
+        }
+
+        if (crossFolderMove) {
+          const updatedSubfolders = [...mainFolder.subfoldersWithVideos]
+
+          // Remove video from current folder
+          const [movedVideo] = updatedSubfolders[selectedFolderIndex].videosSeq.splice(selectedVideoIndex, 1)
+
+          // Add video to the target folder
+          updatedSubfolders[newFolderIndex].videosSeq.splice(newIndex, 0, movedVideo)
+
+          setSelectedFolderIndex(newFolderIndex)
+          setSelectedVideoIndex(newIndex)
+
+          // Handle cross-folder movement on the main process
+          try {
+            const targetFolderName = mainFolder.subfoldersWithVideos[newFolderIndex].name
+
+            // Move the file to the new folder and get the updated path
+            const newPath = await window.api.invoke('move-video-between-folders', movedVideo.path, targetFolderName)
+
+            // Update the path in our data model
+            movedVideo.path = newPath
+
+            // Update indices for source folder
+            const sourceVideos = updatedSubfolders[selectedFolderIndex].videosSeq
+            for (let i = 0; i < sourceVideos.length; i++) {
+              const video = sourceVideos[i]
+              const newPath = await window.api.invoke('update-video-index', video.path, i + 1)
+              sourceVideos[i] = { ...video, path: newPath }
+            }
+
+            // Update indices for target folder
+            const targetVideos = updatedSubfolders[newFolderIndex].videosSeq
+            for (let i = 0; i < targetVideos.length; i++) {
+              const video = targetVideos[i]
+              const newPath = await window.api.invoke('update-video-index', video.path, i + 1)
+              targetVideos[i] = { ...video, path: newPath }
+            }
+
+            // Update state with new paths
+            setMainFolder((prevFolder) => {
+              if (!prevFolder) return null
+              return {
+                ...prevFolder,
+                subfoldersWithVideos: updatedSubfolders,
+              }
+            })
+          } catch (error) {
+            setErrorMessage(`Failed to update video order: ${error instanceof Error ? error.message : String(error)}`)
+          }
         } else {
-          return // Can't move beyond boundaries
-        }
+          // Standard within-folder movement
+          const videos = [...currentVideos]
+          const [movedVideo] = videos.splice(selectedVideoIndex, 1)
+          videos.splice(newIndex, 0, movedVideo)
 
-        const videos = [...currentVideos]
-        const [movedVideo] = videos.splice(selectedVideoIndex, 1)
-        videos.splice(newIndex, 0, movedVideo)
-
-        // Update the state
-        const updatedSubfolders = [...mainFolder.subfoldersWithVideos]
-        updatedSubfolders[selectedFolderIndex] = {
-          ...updatedSubfolders[selectedFolderIndex],
-          videosSeq: videos,
-        }
-        setMainFolder({
-          ...mainFolder,
-          subfoldersWithVideos: updatedSubfolders,
-        })
-
-        // First update the selected index to maintain selection during async operations
-        setSelectedVideoIndex(newIndex)
-
-        // Update the indices in filenames and update the model with new paths
-        try {
-          const updatedVideos = [...videos] // Create a copy to store updated videos
-
-          for (let i = 0; i < videos.length; i++) {
-            const video = videos[i]
-            // Use i+1 to start indexing from 1 instead of 0
-            const newPath = await window.api.invoke('update-video-index', video.path, i + 1)
-
-            // Update the video path in the model
-            updatedVideos[i] = {
-              ...video,
-              path: newPath,
-            }
+          // Update the state
+          const updatedSubfolders = [...mainFolder.subfoldersWithVideos]
+          updatedSubfolders[selectedFolderIndex] = {
+            ...updatedSubfolders[selectedFolderIndex],
+            videosSeq: videos,
           }
-
-          // Update the state with the new paths
-          const updatedSubfoldersWithPaths = [...mainFolder.subfoldersWithVideos]
-          updatedSubfoldersWithPaths[selectedFolderIndex] = {
-            ...updatedSubfoldersWithPaths[selectedFolderIndex],
-            videosSeq: updatedVideos,
-          }
-
-          // Use a callback to ensure we're working with the latest state
-          setMainFolder((prevFolder) => {
-            if (!prevFolder) return null
-            return {
-              ...prevFolder,
-              subfoldersWithVideos: updatedSubfoldersWithPaths,
-            }
+          setMainFolder({
+            ...mainFolder,
+            subfoldersWithVideos: updatedSubfolders,
           })
-        } catch (error) {
-          setErrorMessage(`Failed to update video order: ${error instanceof Error ? error.message : String(error)}`)
+
+          // First update the selected index to maintain selection during async operations
+          setSelectedVideoIndex(newIndex)
+
+          // Update the indices in filenames and update the model with new paths
+          try {
+            const updatedVideos = [...videos] // Create a copy to store updated videos
+
+            for (let i = 0; i < videos.length; i++) {
+              const video = videos[i]
+              // Use i+1 to start indexing from 1 instead of 0
+              const newPath = await window.api.invoke('update-video-index', video.path, i + 1)
+
+              // Update the video path in the model
+              updatedVideos[i] = {
+                ...video,
+                path: newPath,
+              }
+            }
+
+            // Update the state with the new paths
+            const updatedSubfoldersWithPaths = [...mainFolder.subfoldersWithVideos]
+            updatedSubfoldersWithPaths[selectedFolderIndex] = {
+              ...updatedSubfoldersWithPaths[selectedFolderIndex],
+              videosSeq: updatedVideos,
+            }
+
+            // Use a callback to ensure we're working with the latest state
+            setMainFolder((prevFolder) => {
+              if (!prevFolder) return null
+              return {
+                ...prevFolder,
+                subfoldersWithVideos: updatedSubfoldersWithPaths,
+              }
+            })
+          } catch (error) {
+            setErrorMessage(`Failed to update video order: ${error instanceof Error ? error.message : String(error)}`)
+          }
         }
       }
     }
