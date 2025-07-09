@@ -52,8 +52,12 @@ export function removeFileExtension(filename: string) {
 
 export function loadVideosFromFolder(folderPath: string) {
   const files = fs.readdirSync(folderPath)
+  const videoExtensions = ['.mp4', '.avi', '.mov', '.mkv', '.webm', '.flv', '.wmv', '.m4v', '.3gp', '.ogg']
   const videoFiles = files
-    .filter((f) => f.endsWith('.mp4'))
+    .filter((f) => {
+      const ext = path.extname(f).toLowerCase()
+      return videoExtensions.includes(ext)
+    })
     .map((file) => {
       const fullPath = path.join(folderPath, file)
       const { name: extractedName, position, index } = extractOrderAndPlayingTimeFromFilename(removeFileExtension(file))
