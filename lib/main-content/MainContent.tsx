@@ -3,6 +3,14 @@ import React from 'react'
 import VideoJS from '../window/components/VideoJS'
 import videojs from 'video.js'
 
+// Extend the Window interface to include our custom property
+declare global {
+  interface Window {
+    handleVideoSeeking?: (currentTime: number) => void
+    api: any
+  }
+}
+
 export default function MainContent() {
   const playerRef = React.useRef<any>(null)
 
@@ -42,20 +50,6 @@ export default function MainContent() {
 
     player.on('waiting', () => {
       videojs.log('player is waiting')
-    })
-
-    player.on('pause', () => {
-      // Save position when video is paused
-      if (playingVideo) {
-        saveVideoPosition(playingVideo, player.currentTime())
-      }
-    })
-
-    player.on('dispose', () => {
-      videojs.log('player will dispose')
-      if (playingVideo) {
-        saveVideoPosition(playingVideo, player.currentTime())
-      }
     })
   }
 
@@ -116,6 +110,28 @@ export default function MainContent() {
       setErrorMessage(`Failed to load video: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
+
+  // Handle video seeking by updating position and reloading the video
+  // needed since seeking does not work with huge files, see https://github.com/videojs/http-streaming/issues/1356)
+  const handleVideoSeeking = async (currentTime: number) => {
+    if (!playingVideo) return
+    try {
+      const updatedVideo = {
+        ...playingVideo,
+        lastPlayedPosition: currentTime,
+      }
+      setPlayingVideo(updatedVideo)
+    } catch (error) {
+      setErrorMessage(`Failed to handle seeking: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  // Make the seeking handler available globally for the VideoJS component
+  React.useEffect(() => {
+    window.handleVideoSeeking = handleVideoSeeking
+    return () => {
+      delete window.handleVideoSeeking
+    }
+  }, [playingVideo])
 
   const setNewFolder = async () => {
     try {
@@ -186,6 +202,17 @@ export default function MainContent() {
   const findFirstNonEmptyFolderIndex = (): number => {
     if (!mainFolder) return -1
     return mainFolder.subfoldersWithVideos.findIndex((subfolder) => subfolder.videosSeq.length > 0)
+  }
+
+  const closeVideoAndSavePosition = async () => {
+    try {
+      if (playerRef.current && playingVideo) {
+        await saveVideoPosition(playingVideo, playerRef.current.currentTime())
+      }
+      setPlayingVideo(null)
+    } catch (error) {
+      setErrorMessage(`Failed to save video position: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   const handleKeyDown = async (e: KeyboardEvent) => {
@@ -391,15 +418,15 @@ export default function MainContent() {
 
     // Handle ESC key to close the video
     if (e.key === 'Escape') {
-      setPlayingVideo(null)
+      closeVideoAndSavePosition()
     }
 
     // Handle Space key to toggle play/pause
     if (e.key === ' ' && playerRef.current) {
       if (playerRef.current.paused()) {
-        playerRef.current.play();
+        playerRef.current.play()
       } else {
-        playerRef.current.pause();
+        playerRef.current.pause()
       }
     }
 
@@ -484,16 +511,7 @@ export default function MainContent() {
           <button
             className="back-btn"
             onClick={async () => {
-              try {
-                if (playerRef.current && playingVideo) {
-                  await saveVideoPosition(playingVideo, playerRef.current.currentTime())
-                }
-                setPlayingVideo(null)
-              } catch (error) {
-                setErrorMessage(
-                  `Failed to save video position: ${error instanceof Error ? error.message : String(error)}`
-                )
-              }
+              await closeVideoAndSavePosition()
             }}
           >
             ←

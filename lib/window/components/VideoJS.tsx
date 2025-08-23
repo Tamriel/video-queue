@@ -2,9 +2,17 @@ import React from 'react'
 import videojs from 'video.js'
 import 'video.js/dist/video-js.css'
 
-export const VideoJS = (props) => {
-  const videoRef = React.useRef(null)
-  const playerRef = React.useRef(null)
+interface VideoJSProps {
+  options: {
+    sources: any;
+    autoplay?: boolean;
+  };
+  onReady?: (player: any) => void;
+}
+
+export const VideoJS = (props: VideoJSProps) => {
+  const videoRef = React.useRef<HTMLDivElement>(null)
+  const playerRef = React.useRef<any>(null)
   const { options, onReady } = props
 
   React.useEffect(() => {
@@ -14,10 +22,24 @@ export const VideoJS = (props) => {
       const videoElement = document.createElement('video-js')
 
       videoElement.classList.add('vjs-big-play-centered')
-      videoRef.current.appendChild(videoElement)
+      if (videoRef.current) {
+        videoRef.current.appendChild(videoElement)
+      }
 
       const player = (playerRef.current = videojs(videoElement, options, () => {
         videojs.log('player is ready')
+        
+        // Add seeking event handler to handle large video seeking
+        player.on('seeking', () => {
+          const currentTime = player.currentTime();        
+          // Call the global seeking handler function from MainContent
+          if (window.handleVideoSeeking && typeof currentTime === 'number') {
+            window.handleVideoSeeking(currentTime);
+          } else {
+            console.warn('handleVideoSeeking function not found or currentTime is not a number');
+          }
+        });
+        
         onReady && onReady(player)
       }))
 
