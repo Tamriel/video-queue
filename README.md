@@ -20,9 +20,10 @@ A minimal desktop video player that remembers your progress, lets you control pl
 ## Planned Features
 
 - since we dont show videos from the mainfolder: show a warning if that happens
-- display viewing progress in video list
+- display viewing progress in the video list by putting a thick bright-grey bar below started videos (only) and coloring that bar in bright blue according to the progress
 - keystroke to delete the selected video (but show a popup where you need to confirm with enter or cancel with esc)
-- add plus-button behind each folder which downloads a youtube URL and into the folder "Download"
+- add plus-button behind each folder which downloads a youtube URL and into the folder "Download". 
+- When adding a youtube URL which contains a timestamp, set the playback position of the downloaded video to it.
 - build for Android
 - sync to smartphone
 

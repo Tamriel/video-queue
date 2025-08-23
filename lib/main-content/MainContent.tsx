@@ -389,6 +389,11 @@ export default function MainContent() {
       }
     }
 
+    // Handle ESC key to close the video
+    if (e.key === 'Escape') {
+      setPlayingVideo(null)
+    }
+
     // Handle Enter key to play selected video
     if (e.key === 'Enter') {
       if (
