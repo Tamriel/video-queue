@@ -394,6 +394,15 @@ export default function MainContent() {
       setPlayingVideo(null)
     }
 
+    // Handle Space key to toggle play/pause
+    if (e.key === ' ' && playerRef.current) {
+      if (playerRef.current.paused()) {
+        playerRef.current.play();
+      } else {
+        playerRef.current.pause();
+      }
+    }
+
     // Handle Enter key to play selected video
     if (e.key === 'Enter') {
       if (
