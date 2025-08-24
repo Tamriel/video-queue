@@ -300,8 +300,8 @@ export default function MainContent() {
         }
       }
 
-      // Handle Ctrl+Arrow for reordering
-      if (e.ctrlKey) {
+      // Handle Alt+Shift+Arrow and Ctrl+Arrow for reordering
+      if ((e.altKey && e.shiftKey) || e.ctrlKey) {
         const currentVideos = currentFolder.videosSeq
         let newIndex = selectedVideoIndex
         let newFolderIndex = selectedFolderIndex
