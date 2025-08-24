@@ -57,10 +57,12 @@ export function loadVideosFromFolder(folderPath: string) {
   let subtitleFiles: string[] = []
   const parentDir = path.dirname(folderPath)
   const subtitlesPath = path.join(parentDir, '_subtitles')
-  try {
-    subtitleFiles = fs.readdirSync(subtitlesPath)
-  } catch (error) {
-    console.error('Error reading subtitles folder:', error)
+  if (fs.existsSync(subtitlesPath)) {
+    try {
+      subtitleFiles = fs.readdirSync(subtitlesPath)
+    } catch (error) {
+      console.error('Error reading subtitles folder:', error)
+    }
   }
 
   const videoFiles = files
@@ -153,10 +155,7 @@ export function scanForSubfoldersWithVideos(folderPath: string) {
     .filter((entry) => entry.isDirectory() && entry.name !== '_subtitles') // Exclude _subtitles folder
     .map((dir) => {
       const subfolder = path.join(folderPath, dir.name)
-
-      // Get videos in this subfolder
       const videos = loadVideosFromFolder(subfolder)
-
       return {
         name: dir.name,
         videosSeq: videos,
