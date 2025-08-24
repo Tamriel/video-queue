@@ -17,6 +17,11 @@ A minimal desktop video player that remembers your progress, lets you control pl
 
 - Playback positions and playback order are saved directly in the video file names.
 
+## Getting good subtitles
+When downloading subtitles from Youtube, they have two lines, which many people find annoying.
+To convert them to single line subtitles, I use https://github.com/bindestriche/srt_fix, e.g. like this:
+`yt-dlp -f 602 --write-auto-sub --no-embed-subs --sub-lang "English" --sub-format srt --use-postprocessor srt_fix https://www.youtube.com/watch?v=yJ44SxiemMs`
+
 ## Planned Features
 
 - since we dont show videos from the mainfolder: show a warning if that happens

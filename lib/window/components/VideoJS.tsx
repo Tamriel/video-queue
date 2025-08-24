@@ -39,13 +39,46 @@ export const VideoJS = (props: VideoJSProps) => {
         // Add subtitle tracks if available
         if (options.textTracks && options.textTracks.length > 0) {
           options.textTracks.forEach(track => {
-            player.addRemoteTextTrack({
-              src: track.src,
-              kind: track.kind,
-              label: track.label,
-              language: track.language,
-              default: track.default
-            }, false);
+            fetch(track.src)
+              .then(response => response.text())
+              .then(srtContent => {
+                // If this is an SRT file (contains timestamps with commas): conversion to WebVTT needed
+                if (srtContent.includes(',')) {
+                  let vttContent = 'WEBVTT\n\n';                  
+                  const lines = srtContent.split('\n');
+                  let i = 0;                  
+                  while (i < lines.length) {
+                    const line = lines[i];                    
+                    if (line.includes(' --> ') && line.includes(',')) {
+                      vttContent += line.replace(/(\d\d:\d\d:\d\d),(\d\d\d)/g, '$1.$2') + '\n';
+                    } else {
+                      vttContent += line + '\n';
+                    }                    
+                    i++;
+                  }            
+
+                  const vttBlob = new Blob([vttContent], {type: 'text/vtt'});
+                  player.addRemoteTextTrack({
+                    src: URL.createObjectURL(vttBlob),
+                    kind: track.kind,
+                    label: track.label,
+                    language: track.language,
+                    default: track.default
+                  }, false);
+                } else {
+                  // If it's already WebVTT or another format, use it directly
+                  player.addRemoteTextTrack({
+                    src: track.src,
+                    kind: track.kind,
+                    label: track.label,
+                    language: track.language,
+                    default: track.default
+                  }, false);
+                }
+              })
+              .catch(error => {
+                console.error('Error loading subtitles:', error);                
+              });
           });
         }
         
