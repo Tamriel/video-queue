@@ -60,6 +60,34 @@ export const VideoJS = (props: VideoJSProps) => {
           }
         });
         
+        // Add keyboard event listeners for arrow key navigation
+        const handleKeyDown = (event: KeyboardEvent) => {
+          if (event.key === 'ArrowLeft') {
+            // Skip 5 seconds backward
+            const currentTime = player.currentTime();
+            if (typeof currentTime === 'number') {
+              const newTime = Math.max(0, currentTime - 5);
+              player.currentTime(newTime);
+              if (window.handleVideoSeeking) {
+                window.handleVideoSeeking(newTime);
+              }
+            }
+          } else if (event.key === 'ArrowRight') {
+            // Skip 5 seconds forward
+            const currentTime = player.currentTime();
+            const duration = player.duration();
+            if (typeof currentTime === 'number' && typeof duration === 'number') {
+              const newTime = Math.min(duration, currentTime + 5);
+              player.currentTime(newTime);
+              if (window.handleVideoSeeking) {
+                window.handleVideoSeeking(newTime);
+              }
+            }
+          }
+        };        
+        document.addEventListener('keydown', handleKeyDown);        
+        player.handleKeyDown = handleKeyDown;
+        
         onReady && onReady(player)
       }))
 
@@ -79,6 +107,9 @@ export const VideoJS = (props: VideoJSProps) => {
 
     return () => {
       if (player && !player.isDisposed()) {
+        if (player.handleKeyDown) {
+          document.removeEventListener('keydown', player.handleKeyDown);
+        }
         player.dispose()
         playerRef.current = null
       }
