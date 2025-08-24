@@ -14,7 +14,7 @@ declare global {
 export default function MainContent() {
   const playerRef = React.useRef<any>(null)
 
-  type Video = { name: string; path: string; lastPlayedPosition?: number; index?: number }
+  type Video = { name: string; path: string; lastPlayedPosition?: number; index?: number; subtitlePath?: string }
   type Subfolder = { name: string; videosSeq: Video[] }
   type MainFolder = {
     path: string
@@ -24,6 +24,7 @@ export default function MainContent() {
   }
 
   const [videoSources, setVideoSources] = React.useState<Array<{ src: string; type: string }>>([])
+  const [textTracks, setTextTracks] = React.useState<Array<{ src: string; kind: string; label: string; language: string; default?: boolean }>>([])
   const [mainFolder, setMainFolder] = React.useState<MainFolder | null>(null)
   const [playingVideo, setPlayingVideo] = React.useState<Video | null>(null)
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null)
@@ -36,6 +37,7 @@ export default function MainContent() {
     responsive: true,
     fluid: true,
     sources: videoSources,
+    textTracks: textTracks,
     controlBar: {
       pictureInPictureToggle: false,
     },
@@ -96,6 +98,7 @@ export default function MainContent() {
 
   const playVideoFromFile = async (video: Video) => {
     try {
+      // Set video sources
       if (isDev) {
         const base64 = await window.api.invoke('load-video-data', video.path)
         const blob = new Blob([Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))], { type: 'video/mp4' })
@@ -105,6 +108,35 @@ export default function MainContent() {
         const fileUrl = `file://${video.path}`
         setVideoSources([{ src: fileUrl, type: 'video/mp4' }])
       }
+      
+      // Handle subtitle tracks
+      const newTextTracks: Array<{ src: string; kind: string; label: string; language: string; default?: boolean }> = []
+      
+      if (video.subtitlePath) {
+        let subtitleUrl: string        
+        if (isDev) {
+          try {
+            const subtitleBase64 = await window.api.invoke('load-video-data', video.subtitlePath)
+            const subtitleBlob = new Blob([Uint8Array.from(atob(subtitleBase64), (c) => c.charCodeAt(0))], { type: 'text/plain' })
+            subtitleUrl = URL.createObjectURL(subtitleBlob)
+          } catch (error) {
+            console.error('Failed to load subtitle:', error)
+            subtitleUrl = `file://${video.subtitlePath}`
+          }
+        } else {
+          subtitleUrl = `file://${video.subtitlePath}`
+        }
+        
+        newTextTracks.push({
+          src: subtitleUrl,
+          kind: 'subtitles',
+          label: 'Subtitles',
+          language: 'en',
+          default: true
+        })
+      }
+      
+      setTextTracks(newTextTracks)
       setPlayingVideo(video)
     } catch (error) {
       setErrorMessage(`Failed to load video: ${error instanceof Error ? error.message : String(error)}`)

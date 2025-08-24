@@ -6,6 +6,13 @@ interface VideoJSProps {
   options: {
     sources: any;
     autoplay?: boolean;
+    textTracks?: Array<{
+      src: string;
+      kind: string;
+      label: string;
+      language: string;
+      default?: boolean;
+    }>;
   };
   onReady?: (player: any) => void;
 }
@@ -29,9 +36,22 @@ export const VideoJS = (props: VideoJSProps) => {
       const player = (playerRef.current = videojs(videoElement, options, () => {
         videojs.log('player is ready')
         
+        // Add subtitle tracks if available
+        if (options.textTracks && options.textTracks.length > 0) {
+          options.textTracks.forEach(track => {
+            player.addRemoteTextTrack({
+              src: track.src,
+              kind: track.kind,
+              label: track.label,
+              language: track.language,
+              default: track.default
+            }, false);
+          });
+        }
+        
         // Add seeking event handler to handle large video seeking
         player.on('seeking', () => {
-          const currentTime = player.currentTime();        
+          const currentTime = player.currentTime();
           // Call the global seeking handler function from MainContent
           if (window.handleVideoSeeking && typeof currentTime === 'number') {
             window.handleVideoSeeking(currentTime);

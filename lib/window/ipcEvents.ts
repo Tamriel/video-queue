@@ -53,6 +53,16 @@ export function removeFileExtension(filename: string) {
 export function loadVideosFromFolder(folderPath: string) {
   const files = fs.readdirSync(folderPath)
   const videoExtensions = ['.mp4', '.avi', '.mov', '.mkv', '.webm', '.flv', '.wmv', '.m4v', '.3gp', '.ogg']
+
+  let subtitleFiles: string[] = []
+  const parentDir = path.dirname(folderPath)
+  const subtitlesPath = path.join(parentDir, '_subtitles')
+  try {
+    subtitleFiles = fs.readdirSync(subtitlesPath)
+  } catch (error) {
+    console.error('Error reading subtitles folder:', error)
+  }
+
   const videoFiles = files
     .filter((f) => {
       const ext = path.extname(f).toLowerCase()
@@ -62,14 +72,37 @@ export function loadVideosFromFolder(folderPath: string) {
       const fullPath = path.join(folderPath, file)
       const { name: extractedName, position, index } = extractOrderAndPlayingTimeFromFilename(removeFileExtension(file))
 
+      // find matching subtitle file
+      let subtitlePath: string | undefined = undefined
+      var extension = path.extname(file)
+      const nameWithoutExt = file.slice(0, file.length - extension.length)
+      let videoName = videoNameWithoutPrefixes(nameWithoutExt)
+      const matchingSubtitle = subtitleFiles.find((subFile) => subFile.split('.')[0] === videoName.split('.')[0])
+      if (matchingSubtitle) {
+        subtitlePath = path.join(subtitlesPath, matchingSubtitle)
+      }     
+
       return {
         name: extractedName,
         path: fullPath,
         lastPlayedPosition: position,
         index,
+        subtitlePath,
       }
     })
   return videoFiles
+}
+
+export function videoNameWithoutPrefixes(nameWithoutExt: string): string {
+  // Extract index if it exists
+  const indexMatch = nameWithoutExt.match(/^(\d+)\s+(.+)$/)
+
+  // Get the clean name (without time prefix and index prefix)
+  let cleanName = nameWithoutExt
+  if (indexMatch) {
+    cleanName = indexMatch[2]
+  }
+  return cleanName.replace(/^\d{2}:\d{2}\s+/, '')
 }
 
 export function renameVideoWithPosition(videoPath: string, position: number): string {
@@ -82,12 +115,7 @@ export function renameVideoWithPosition(videoPath: string, position: number): st
   const indexMatch = nameWithoutExt.match(/^(\d+)\s+(.+)$/)
   const indexPrefix = indexMatch ? `${indexMatch[1]} ` : ''
 
-  // Get the clean name (without time prefix and index prefix)
-  let cleanName = nameWithoutExt
-  if (indexMatch) {
-    cleanName = indexMatch[2]
-  }
-  cleanName = cleanName.replace(/^\d{2}:\d{2}\s+/, '')
+  let cleanName = videoNameWithoutPrefixes(nameWithoutExt)
 
   // Create new filename with time prefix and preserve index if it exists
   const timePrefix = playingTimeToFilename(position)
@@ -122,7 +150,7 @@ export function updateVideoIndex(videoPath: string, index: number): string {
 export function scanForSubfoldersWithVideos(folderPath: string) {
   const entries = fs.readdirSync(folderPath, { withFileTypes: true })
   const subfoldersWithVideos = entries
-    .filter((entry) => entry.isDirectory())
+    .filter((entry) => entry.isDirectory() && entry.name !== '_subtitles') // Exclude _subtitles folder
     .map((dir) => {
       const subfolder = path.join(folderPath, dir.name)
 

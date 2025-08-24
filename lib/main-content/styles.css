@@ -181,3 +181,9 @@
   font-size: 1.1rem;
   font-weight: 600;
 }
+
+/* subtitles */
+.vjs-text-track-cue {
+  text-align: center !important;
+  font-size: 2.8rem !important;
+}
