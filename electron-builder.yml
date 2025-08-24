@@ -1,5 +1,5 @@
-appId: com.guasam.era
-productName: ElectronReactApp
+appId: com.tamriel.videoqueue
+productName: Video Queue
 directories:
   buildResources: resources/build
 files:
@@ -12,7 +12,7 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: ElectronReactApp
+  executableName: VideoQueue
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
