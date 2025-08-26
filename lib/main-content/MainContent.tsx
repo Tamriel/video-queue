@@ -497,7 +497,7 @@ export default function MainContent() {
     return () => {
       window.removeEventListener('keydown', handleGlobalKeyDown)
     }
-  }, [mainFolder, selectedFolderIndex, selectedVideoIndex]) // Re-add when these dependencies change
+  }, [mainFolder, selectedFolderIndex, selectedVideoIndex, playingVideo]) // Re-add when these dependencies change
 
   React.useEffect(() => {
     window.api
