@@ -25,7 +25,7 @@ const { Conf } = require('electron-conf/main');
 const {
   loadVideosFromFolder,
   playingTimeToFilename,
-  extractPlayingTimeFromFilename,
+  extractOrderAndPlayingTimeFromFilename,
   renameVideoWithPosition
 } = require('../lib/window/ipcEvents');
 
@@ -49,7 +49,10 @@ beforeAll(() => {
   // Create test video files
   createVideoFile(path.join(MAIN_FOLDER, 'video1.mp4'));
   createVideoFile(path.join(MAIN_FOLDER, '01:30 video2.mp4'));
-  createVideoFile(path.join(SUBFOLDER, '05:45 video3.mp4'));
+  createVideoFile(path.join(MAIN_FOLDER, '3 video3.mp4'));
+  createVideoFile(path.join(MAIN_FOLDER, '1 01:30 video4.mp4'));
+  createVideoFile(path.join(MAIN_FOLDER, '2 video5.mp4'));
+  createVideoFile(path.join(SUBFOLDER, '05:45 video6.mp4'));
 });
 
 // Clean up after tests
@@ -66,25 +69,38 @@ describe('Filename position storage', () => {
     expect(playingTimeToFilename(0)).toBe('00:00');
   });
 
-  test('Should extract time correctly from filenames', () => {
-    const result1 = extractPlayingTimeFromFilename('01:30 video2');
+  test('Should extract time and order correctly from filenames', () => {
+    const result1 = extractOrderAndPlayingTimeFromFilename('01:30 video2');
     expect(result1.name).toBe('video2');
     expect(result1.position).toBe(90);
+    expect(result1.index).toBeUndefined();
 
-    const result2 = extractPlayingTimeFromFilename('05:45 video3');
-    expect(result2.name).toBe('video3');
+    const result2 = extractOrderAndPlayingTimeFromFilename('05:45 video6');
+    expect(result2.name).toBe('video6');
     expect(result2.position).toBe(345);
+    expect(result2.index).toBeUndefined();
 
-    const result3 = extractPlayingTimeFromFilename('video1');
+    const result3 = extractOrderAndPlayingTimeFromFilename('video1');
     expect(result3.name).toBe('video1');
     expect(result3.position).toBeUndefined();
+    expect(result3.index).toBeUndefined();
+    
+    const result4 = extractOrderAndPlayingTimeFromFilename('3 video3');
+    expect(result4.name).toBe('video3');
+    expect(result4.position).toBeUndefined();
+    expect(result4.index).toBe(3);
+    
+    const result5 = extractOrderAndPlayingTimeFromFilename('1 01:30 video4');
+    expect(result5.name).toBe('video4');
+    expect(result5.position).toBe(90);
+    expect(result5.index).toBe(1);
   });
 
   test('Should load videos with positions from filenames', () => {
     const videos = loadVideosFromFolder(MAIN_FOLDER);
     
-    // Should find 2 videos in the main folder
-    expect(videos.length).toBe(2);
+    // Should find 5 videos in the main folder
+    expect(videos.length).toBe(5);
     
     // Find video1 (no position in filename)
     const video1 = videos.find(v => v.name === 'video1');
@@ -95,6 +111,40 @@ describe('Filename position storage', () => {
     const video2 = videos.find(v => v.name === 'video2');
     expect(video2).toBeDefined();
     expect(video2.lastPlayedPosition).toBe(90); // 01:30 = 90 seconds
+    
+    // Find video3 (with index in filename)
+    const video3 = videos.find(v => v.name === 'video3');
+    expect(video3).toBeDefined();
+    expect(video3.index).toBe(3);
+    
+    // Find video4 (with both index and position)
+    const video4 = videos.find(v => v.name === 'video4');
+    expect(video4).toBeDefined();
+    expect(video4.lastPlayedPosition).toBe(90);
+    expect(video4.index).toBe(1);
+  });
+  
+  test('Should sort videos by index first, then by name', () => {
+    const videos = loadVideosFromFolder(MAIN_FOLDER);
+    
+    // Videos should be sorted by index first, then by name
+    expect(videos.length).toBe(5);
+    
+    // First should be video4 (index 1)
+    expect(videos[0].name).toBe('video4');
+    expect(videos[0].index).toBe(1);
+    
+    // Second should be video5 (index 2)
+    expect(videos[1].name).toBe('video5');
+    expect(videos[1].index).toBe(2);
+    
+    // Third should be video3 (index 3)
+    expect(videos[2].name).toBe('video3');
+    expect(videos[2].index).toBe(3);
+    
+    // The rest should be sorted by name (video1, video2)
+    expect(videos[3].name).toBe('video1');
+    expect(videos[4].name).toBe('video2');
   });
 
   test('Should rename video file with position', () => {

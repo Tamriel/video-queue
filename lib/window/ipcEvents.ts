@@ -82,7 +82,7 @@ export function loadVideosFromFolder(folderPath: string) {
       const matchingSubtitle = subtitleFiles.find((subFile) => subFile.split('.')[0] === videoName.split('.')[0])
       if (matchingSubtitle) {
         subtitlePath = path.join(subtitlesPath, matchingSubtitle)
-      }     
+      }
 
       return {
         name: extractedName,
@@ -92,6 +92,18 @@ export function loadVideosFromFolder(folderPath: string) {
         subtitlePath,
       }
     })
+    .sort((a, b) => {
+      // Sort by index if both have an index
+      if (a.index !== undefined && b.index !== undefined) {
+        return a.index - b.index;
+      }
+      // If only one has an index, prioritize the one with an index
+      if (a.index !== undefined) return -1;
+      if (b.index !== undefined) return 1;
+      
+      // If neither has an index, sort by name
+      return a.name.localeCompare(b.name);
+    });
   return videoFiles
 }
 
